@@ -1,0 +1,1 @@
+MoonVerb runs a digital reverb's own firmware. The firmware is not included: after installing, open MoonVerb and choose the folder that holds your own firmware images (LOAD ROM FOLDER). See the manual for the five files it needs.

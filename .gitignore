@@ -1,0 +1,24 @@
+build/
+.DS_Store
+*.dSYM/
+tests/test_roms
+tests/test_machine
+tests/test_hsp
+tests/test_analog
+tests/test_voice
+tests/test_control
+tests/test_panel
+tests/voice_ir
+tests/*.o
+
+# The firmware images are the manufacturer's and are never committed. MoonVerb loads them at run time
+# from a folder you point it at; tests read them from $MOONVERB_ROMS, outside the repository. Only their
+# SHA-256 hashes are in the source.
+*.bin
+*.BIN
+*.rom
+*.syx
+*.mid
+# ...nor any recording or impulse response of the unit.
+*.wav
+*.f64
