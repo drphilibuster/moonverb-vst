@@ -47,7 +47,7 @@ MoonVerbProcessor::MoonVerbProcessor()
     for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) {
         cellRaw[r * COLS + c] = apvts.getRawParameterValue(cellId(r, c));
         cellParam[r * COLS + c] = apvts.getParameter(cellId(r, c));
-        follow[r * COLS + c] = 0.f;
+        follow[r * COLS + c] = -1.f; followTarget[r * COLS + c] = -1.f; followFrom[r * COLS + c] = 0.f;
     }
     bypassRaw = apvts.getRawParameterValue("bypass"); inputRaw = apvts.getRawParameterValue("input"); inPadRaw = apvts.getRawParameterValue("inpad"); outPadRaw = apvts.getRawParameterValue("outpad");
     bypassParam = dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("bypass"));
@@ -173,6 +173,7 @@ void MoonVerbProcessor::ask(std::function<void(Voice&)> f) {
     cmds.push_back(std::move(f)); cmdPending = true;
 }
 void MoonVerbProcessor::pressKey(Keys::Key k, bool down) { ask([k, down](Voice& v) { v.keys.setKey(k, down); }); }
+void MoonVerbProcessor::store() { ask([](Voice& v) { v.keys.storeGesture(); }); }
 void MoonVerbProcessor::softKnob(int delta) {
     ask([delta](Voice& v) {
         if (v.keys.mode() != 1 || !v.control.tableReady()) return;                // the knob edits what the display shows, in PARAM mode
@@ -239,7 +240,7 @@ void MoonVerbProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     if (!voice) {
         if (Voice* h = handover.exchange(nullptr)) {
             if (std::fabs(h->hostRate() - hostRate) > 1.0) delete h;           // (prepareToPlay restarts the power-up on a rate change, so this is only a guard)
-            else { voice.reset(h); ctlCount = 0; bypassInit = false; lastFwBypass = -1; clockFromMidi = false; wasPlaying = false; }
+            else { voice.reset(h); for (float& t : followTarget) t = -1.f; ctlCount = 0; bypassInit = false; bypassFollowing = false; tapWait = 0.0; lastFwBypass = -1; clockFromMidi = false; wasPlaying = false; }
         }
     }
     if (!voice || !power.load()) { buffer.clear(); midi.clear(); return; }
@@ -288,17 +289,34 @@ void MoonVerbProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
         if (--ctlCount <= 0) {
             ctlCount = ctlPeriod;
             PanelLogic::In in; in.dt = ctlPeriod / hostRate;
-            for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) in.knob[r][c] = cellRaw[r * COLS + c]->load();
+            for (int i = 0; i < ROWS * COLS; i++) {
+                // A value the firmware set is on its way to the host (the message thread applies it up to a timer tick later). Until the host's value moves
+                // off the one it had, that value is stale, not a hand on the knob: read as a touch it would be written back and undo the firmware's move.
+                const float k = cellRaw[i]->load();
+                if (followTarget[i] >= 0.f && k == followFrom[i]) in.knob[i / COLS][i % COLS] = followTarget[i];
+                else { followTarget[i] = -1.f; in.knob[i / COLS][i % COLS] = k; }
+            }
             in.input = inputRaw->load(); in.inPad20 = inPadRaw->load() > 0.5f; in.outPad20 = outPadRaw->load() > 0.5f; in.trimVolts = 1.f;     // one volt = full scale: samples are volts
             PanelLogic::Out out;
             logic.control(v, in, out);
-            for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) if (out.setKnob[r][c]) { follow[r * COLS + c] = out.knob[r][c]; followPending = true; }
+            for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) if (out.setKnob[r][c]) {
+                const int i = r * COLS + c;
+                if (followTarget[i] < 0.f) followFrom[i] = cellRaw[i]->load();
+                followTarget[i] = out.knob[r][c]; follow[i] = out.knob[r][c]; followPending = true;
+            }
             // BYPASS: the host's switch and the unit's own key are one thing
-            const float bp = bypassRaw->load(); const int fw = v.control.bypassed() ? 1 : 0;
-            if (!bypassInit) { bypassInit = true; lastBypassParam = bp; lastFwBypass = fw; if ((bp > 0.5f) != (fw != 0)) bypassFollow = fw; if ((bp > 0.5f) != (fw != 0)) lastBypassParam = (float)fw; }
+            // The firmware's flag is the truth; the host's switch asks for a change. A value this side sent to the host arrives a timer tick later: until the
+            // host's value moves off the one it had, it is stale, not a request (read as one, it would tap BYPASS again and the two would chase each other).
+            const float bpRaw = bypassRaw->load(); const bool fw = v.control.bypassed();
+            bool bp = bpRaw > 0.5f;
+            if (bypassFollowing) { if (bpRaw == bypassFrom) bp = bypassTarget; else bypassFollowing = false; }
+            auto show = [&](bool x) { if (!bypassFollowing) bypassFrom = bpRaw; bypassFollowing = true; bypassTarget = x; bypassFollow = x ? 1 : 0; bp = x; };
+            if (tapWait > 0.0) tapWait -= in.dt;
+            if (!bypassInit) { bypassInit = true; lastFwBypass = fw ? 1 : 0; if (bp != fw) show(fw); lastBypassReq = bp; }
+            else if ((fw ? 1 : 0) != lastFwBypass) { lastFwBypass = fw ? 1 : 0; tapWait = 0.0; if (bp != fw) show(fw); lastBypassReq = bp; }   // the key, a footswitch, MIDI
             else {
-                if (bp != lastBypassParam) { lastBypassParam = bp; if ((bp > 0.5f) != (fw != 0)) v.keys.bypassTap(); }
-                if (fw != lastFwBypass) { lastFwBypass = fw; if ((bp > 0.5f) != (fw != 0)) { lastBypassParam = (float)fw; bypassFollow = fw; } }
+                if (bp != lastBypassReq) { lastBypassReq = bp; if (bp != fw && tapWait <= 0.0) { v.keys.bypassTap(); tapWait = 1.0; } }   // the host asked
+                else if (bp != fw && tapWait <= 0.0 && !bypassFollowing) { v.keys.bypassTap(); tapWait = 1.0; }                             // a tap that did not take
             }
         }
         const float l0 = ch0[i], r0 = ch1 ? ch1[i] : l0;

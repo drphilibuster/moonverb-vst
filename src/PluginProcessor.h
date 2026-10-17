@@ -40,6 +40,7 @@ public:
 
     // ---- what the front panel does (any thread) ----
     void pressKey(moonverb::Keys::Key k, bool down);        // a key held down / let go, exactly as the scan sees it
+    void store();                                           // STORE: REG held down while LOAD is pressed (files the running program in the register the display shows, REG mode)
     void softKnob(int delta);                               // the soft knob's own call on the parameter the display is showing (PARAM mode)
     void setPower(bool on);
     bool powered() const { return power.load(); }
@@ -88,10 +89,11 @@ private:
     juce::AudioParameterBool* bypassParam = nullptr; juce::RangedAudioParameter* cellParam[ROWS * COLS] = {};
     // audio -> message thread: knobs the firmware moved by itself
     std::atomic<float> follow[ROWS * COLS]; std::atomic<bool> followPending{false}; std::atomic<int> bypassFollow{-1};
+    float followTarget[ROWS * COLS], followFrom[ROWS * COLS];      // audio thread: a followed value not yet seen in the host's parameter, and the host value it replaces
 
     // audio-thread bookkeeping
     int ctlCount = 0, snapCount = 0, ramCount = 0; bool wasPlaying = false; double nextClockPpq = 0.0; bool clockFromMidi = false;
-    float lastBypassParam = 0.f; bool bypassInit = false; int lastFwBypass = -1;
+    bool lastBypassReq = false, bypassInit = false, bypassFollowing = false, bypassTarget = false; float bypassFrom = 0.f; double tapWait = 0.0; int lastFwBypass = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MoonVerbProcessor)
 };

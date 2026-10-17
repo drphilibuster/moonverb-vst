@@ -9,7 +9,7 @@ CXX ?= c++
 CXXFLAGS := -std=c++11 -O2 -Wall -Wextra -g
 
 CORE := ../src/core/Roms.hpp
-MACHINE := ../src/core/Machine.hpp ../src/core/Locate.hpp ../src/core/Drive.hpp ../src/core/BatRam.hpp ../src/core/Hsp.hpp fixtures.hpp hsp_ref.hpp ../src/vendor/z80/z80.c ../src/vendor/z80/z80.h
+MACHINE := ../src/core/Machine.hpp ../src/core/Locate.hpp ../src/core/Drive.hpp ../src/core/BatRam.hpp ../src/core/Hsp.hpp ../src/core/HspJit.hpp fixtures.hpp hsp_ref.hpp ../src/vendor/z80/z80.c ../src/vendor/z80/z80.h
 CC ?= cc
 
 all: test_roms test_machine test_hsp test_analog test_voice test_control test_panel

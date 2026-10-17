@@ -32,9 +32,9 @@ holds paths only) and saved with each project. **Forget** clears it. Power-up ta
 | **PGM**, **REG** | Enter program mode / register mode (lamps show the mode). PGM toggles between program and parameter modes. |
 | **ROW ▲ ▼** | Step through rows of programs, registers or parameters. |
 | **0–9** | Choose a program or register within the row, or a parameter within the row in parameter mode. |
-| **LOAD** | Load the chosen program or register. Hold **REG** and press **LOAD** to store the running program in the chosen register. |
+| **LOAD** | Load the chosen program or register. **Shift-click** (or right-click) **LOAD** to store the running program in the chosen register: the unit's "hold REG, press LOAD", which a mouse cannot do with two fingers. |
 | **BYPASS** | Toggle bypass (lamp). Also the plug-in's host bypass. |
-| **Soft knob** | Edits the parameter the display shows (parameter mode): the firmware's own edit routine, so ranges, limits and masters behave exactly as on the hardware. Drag up/down or use the wheel; a fast turn travels further. |
+| **Soft knob** | Edits the parameter the display shows (parameter mode): the firmware's own edit routine, so ranges, limits and masters behave exactly as on the hardware. Drag up/down or use the wheel; a fast turn travels further. In program and register mode the firmware ignores it, as the hardware does: press **PGM** (its lamp goes out) to reach the parameters. |
 | **Power** | Off silences the unit; on powers it up again. The registers are kept (battery RAM). |
 
 The keys are pressed into the firmware's key matrix as a finger would; a quick click is held long enough to be seen.

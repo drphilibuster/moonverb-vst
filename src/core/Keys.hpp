@@ -17,7 +17,7 @@ namespace moonverb {
 
 class Keys {
 public:
-    enum Key { K0, K1, K2, K3, K4, K5, K6, K7, K8, K9, F1, F2, F3, F4, LOAD, BYP, FOOT, NKEYS };      // FOOT = the footswitch direct bit
+    enum Key { K0, K1, K2, K3, K4, K5, K6, K7, K8, K9, F1, F2, F3, F4, LOAD, BYP, FOOT, SOFT_UP, SOFT_DOWN, NKEYS };      // FOOT = the footswitch direct bit; SOFT_UP/DOWN = one soft-knob pulse (direct 0x01 / 0x05)
     static const unsigned MODE = 0x994D, ROW = 0x994A, COL = 0x9949;
     double tapSeconds = 0.05, gapSeconds = 0.25, settleSeconds = 0.4;
 
@@ -34,6 +34,9 @@ public:
     // A key held down and released by the host's own timing (the plugin's front-panel keys): the same matrix bit the scan ISR reads, with no planning.
     void setKey(Key k, bool down) { Ev e = { 0, k, down }; apply(e); }
     void bypassTap() { tap(BYP); }                                                       // toggles BYPASS ON / OFF (Control::bypassed() reads the flag)
+    // The soft knob as the hardware turns it: one pulse per click on the direct bits (0x01 = +1, 0x05 = -1; Step 36), 30 ms on and 200 ms apart (shorter
+    // clicks are not registered). The firmware does with them whatever it does in the mode it is in.
+    void softClicks(int n) { const Key k = n > 0 ? SOFT_UP : SOFT_DOWN; for (int i = 0; i < (n > 0 ? n : -n); i++) enqueue([this, k]() { const uint64_t t = nextFree(); events.push_back({ t, k, true }); events.push_back({ t + cyc(0.03), k, false }); tail = t + cyc(0.2); }); }
     // The raw footswitch bit: the firmware treats it as a latching switch whose LEVEL is the state (it acts on each change; the first change after power-up
     // sets the flag, later ones follow the level), so a pulse is not a toggle. Use bypassTap() for a toggle.
     void footswitchLevel(bool high) { if (high) M.direct |= 0x80; else M.direct &= (uint8_t)~0x80; }
@@ -76,7 +79,10 @@ private:
         if (k <= K9) { col = dc[k]; row = dr[k]; return; }
         switch (k) { case F1: col = 0; row = 0; break; case F2: col = 0; row = 1; break; case F3: col = 6; row = 0; break; case F4: col = 6; row = 1; break; case LOAD: col = 7; row = 1; break; default: col = 7; row = 0; break; }
     }
-    void apply(const Ev& e) { if (e.k == FOOT) { if (e.down) M.direct |= 0x80; else M.direct &= (uint8_t)~0x80; return; } int c, r; where(e.k, c, r); const uint8_t bit = r ? 0x08 : 0x02; if (e.down) M.keyCol[c] |= bit; else M.keyCol[c] &= (uint8_t)~bit; }
+    void apply(const Ev& e) {
+        if (e.k == FOOT) { if (e.down) M.direct |= 0x80; else M.direct &= (uint8_t)~0x80; return; }
+        if (e.k == SOFT_UP || e.k == SOFT_DOWN) { const uint8_t b = e.k == SOFT_UP ? 0x01 : 0x05; if (e.down) M.direct = (uint8_t)((M.direct & ~0x05) | b); else M.direct &= (uint8_t)~0x05; return; }
+        int c, r; where(e.k, c, r); const uint8_t bit = r ? 0x08 : 0x02; if (e.down) M.keyCol[c] |= bit; else M.keyCol[c] &= (uint8_t)~bit; }
     // leave whatever mode the firmware is in and get to `want` (2 PGM, 4 REG, 1 PARAM): F4 toggles PGM<->PARAM and leaves REG for PGM, F3 enters REG from either
     void gotoMode(int want) {
         int m = mode(); if (m == want) return;

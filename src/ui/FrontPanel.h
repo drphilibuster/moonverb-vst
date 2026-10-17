@@ -25,7 +25,7 @@ public:
 };
 
 /** A key of the front panel: the matrix bit is down while the mouse is, with a minimum so a quick click is still a press. */
-class PanelKey : public juce::Component {
+class PanelKey : public juce::Component, public juce::SettableTooltipClient {
 public:
     PanelKey(MoonVerbProcessor& p, moonverb::Keys::Key k, const juce::String& legend, bool arrow = false) : proc(p), key(k), text(legend), isArrow(arrow) {}
     void setLamp(bool on, bool red = false) { if (lamp != on || lampRed != red) { lamp = on; lampRed = red; repaint(); } }
@@ -34,7 +34,7 @@ public:
     void mouseDown(const juce::MouseEvent&) override;
     void mouseUp(const juce::MouseEvent&) override;
 private:
-    MoonVerbProcessor& proc; moonverb::Keys::Key key; juce::String text; bool isArrow, down = false, lamp = false, lampRed = false; juce::uint32 downAt = 0;
+    MoonVerbProcessor& proc; moonverb::Keys::Key key; juce::String text; bool isArrow, down = false, stored = false, lamp = false, lampRed = false; juce::uint32 downAt = 0;
 };
 
 /** The soft knob: it has no end stops. Each turn is the firmware's own edit of the parameter the display is showing. */

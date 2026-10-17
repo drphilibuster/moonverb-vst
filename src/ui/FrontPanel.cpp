@@ -77,10 +77,15 @@ void PanelKey::paint(juce::Graphics& g) {
         if (lamp) { g.setColour(col.withAlpha(0.22f)); g.fillEllipse(led.expanded(3.f)); }
     }
 }
-void PanelKey::mouseDown(const juce::MouseEvent&) { down = true; downAt = juce::Time::getMillisecondCounter(); proc.pressKey(key, true); repaint(); }
+void PanelKey::mouseDown(const juce::MouseEvent& e) {
+    // STORE needs two fingers on the unit (hold REG, press LOAD): shift-click or right-click LOAD does both
+    if (key == Keys::LOAD && (e.mods.isShiftDown() || e.mods.isPopupMenu())) { stored = true; down = true; proc.store(); repaint(); return; }
+    stored = false; down = true; downAt = juce::Time::getMillisecondCounter(); proc.pressKey(key, true); repaint();
+}
 void PanelKey::mouseUp(const juce::MouseEvent&) {
     if (!down) return;
     down = false; repaint();
+    if (stored) return;
     const juce::uint32 held = juce::Time::getMillisecondCounter() - downAt;
     const juce::uint32 minHold = 90;                                  // the firmware's scan needs the key down for about 0.05 s of its own time
     MoonVerbProcessor& p = proc; const Keys::Key k = key;
@@ -165,7 +170,7 @@ FrontPanel::FrontPanel(MoonVerbProcessor& p) : proc(p), input(juce::Slider::Rota
     addAndMakeVisible(input); addAndMakeVisible(soft); addAndMakeVisible(readout); addAndMakeVisible(leds); addAndMakeVisible(power);
     keys[UP].reset(new PanelKey(p, Keys::F1, "UP", true)); keys[DOWN].reset(new PanelKey(p, Keys::F2, "DOWN", true));
     keys[PGM].reset(new PanelKey(p, Keys::F4, "PGM")); keys[REG].reset(new PanelKey(p, Keys::F3, "REG"));
-    keys[LOAD].reset(new PanelKey(p, Keys::LOAD, "LOAD")); keys[BYP].reset(new PanelKey(p, Keys::BYP, "BYPASS"));
+    keys[LOAD].reset(new PanelKey(p, Keys::LOAD, "LOAD")); keys[LOAD]->setTooltip("LOAD the selected program or register. Shift-click (or right-click) to STORE: as holding REG and pressing LOAD"); keys[BYP].reset(new PanelKey(p, Keys::BYP, "BYPASS"));
     keys[PGM]->hasLamp = keys[REG]->hasLamp = keys[BYP]->hasLamp = true;
     for (int d = 0; d < 10; d++) keys[DIGIT0 + d].reset(new PanelKey(p, Keys::digit(d), juce::String(d)));
     for (auto& k : keys) if (k) addAndMakeVisible(*k);

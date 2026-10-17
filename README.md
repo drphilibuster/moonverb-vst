@@ -85,7 +85,7 @@ If something is wrong the display and the strip say exactly what:
 2. Pick a program with the keys, as on the hardware: make sure the **PGM** lamp is lit (press **PGM** if it is not), step the row with **ROW ▲ ▼**, press a digit **0–9**, then **LOAD**. (`1.3` is row 1, digit 3.) Press **REG** and do the same to load one of your own registers.
 3. To edit, press **PGM** while a program is showing: this switches to parameter mode (both lamps go dark) and the display shows a parameter. Step through the parameters with **ROW** and the digits, and turn the
    **soft knob** (drag up and down, or use the mouse wheel) to change the one on the display. Press **PGM** again to go back. Every parameter is also a host parameter you can automate.
-4. Hold **REG** and press **LOAD** to store what you've built into the chosen register. Registers are saved with your project.
+4. In REG mode, choose a register and **shift-click LOAD** (or right-click it) to store what you've built there: the plug-in's form of the unit's "hold REG, press LOAD". Registers are saved with your project.
 
 The full guide is [docs/MoonVerb.md](docs/MoonVerb.md).
 

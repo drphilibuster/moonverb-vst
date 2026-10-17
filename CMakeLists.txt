@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MoonVerb VERSION 1.0.1 LANGUAGES C CXX)
+project(MoonVerb VERSION 1.0.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -66,6 +66,22 @@ target_include_directories(moonverb_plugin_test PRIVATE src src/core)
 target_compile_definitions(moonverb_plugin_test PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_WINRT_MIDI=0)
 target_link_libraries(moonverb_plugin_test PRIVATE moonverb_z80 juce::juce_audio_utils juce::juce_audio_processors juce::juce_recommended_config_flags)
 set_target_properties(moonverb_plugin_test PROPERTIES EXCLUDE_FROM_ALL TRUE)
+
+# The plugin as a DAW runs it (audio thread + message loop, in real time): `cmake --build build --target moonverb_daw_test`
+juce_add_console_app(moonverb_daw_test PRODUCT_NAME moonverb_daw_test)
+target_sources(moonverb_daw_test PRIVATE tests/daw_test.cpp ${MOONVERB_SOURCES})
+target_include_directories(moonverb_daw_test PRIVATE src src/core)
+target_compile_definitions(moonverb_daw_test PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_WINRT_MIDI=0)
+target_link_libraries(moonverb_daw_test PRIVATE moonverb_z80 juce::juce_audio_utils juce::juce_audio_processors juce::juce_recommended_config_flags)
+set_target_properties(moonverb_daw_test PROPERTIES EXCLUDE_FROM_ALL TRUE)
+
+# Every control, driven as the editor and a host drive it: `cmake --build build --target moonverb_controls_test`
+juce_add_console_app(moonverb_controls_test PRODUCT_NAME moonverb_controls_test)
+target_sources(moonverb_controls_test PRIVATE tests/controls_test.cpp ${MOONVERB_SOURCES})
+target_include_directories(moonverb_controls_test PRIVATE src src/core)
+target_compile_definitions(moonverb_controls_test PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_WINRT_MIDI=0)
+target_link_libraries(moonverb_controls_test PRIVATE moonverb_z80 juce::juce_audio_utils juce::juce_audio_processors juce::juce_recommended_config_flags)
+set_target_properties(moonverb_controls_test PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 # Loads the *installed* VST3 / AU the way a DAW does: `cmake --build build --target moonverb_host_test`
 juce_add_console_app(moonverb_host_test PRODUCT_NAME moonverb_host_test)

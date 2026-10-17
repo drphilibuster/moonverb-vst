@@ -50,6 +50,14 @@ public:
     int laneTarget[LANES]; bool armed[LANES] = {};  // laneTarget is part of the patch
     PanelLogic() { for (int i = 0; i < LANES; i++) laneTarget[i] = -1; for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) { last[r][c] = -1.f; touch[r][c] = -99.0; } }
 
+    /** The firmware's 16 digits with the glyphs the font has no letter for taken out: a '?' is a symbol the display draws and this one cannot, and the dot that
+        belongs to it goes too. */
+    static std::string clean(const std::string& d) {
+        std::string o;
+        for (size_t i = 0; i < d.size(); i++) { if (d[i] == '?') { o += ' '; if (i + 1 < d.size() && d[i + 1] == '.') i++; } else o += d[i]; }
+        return o;
+    }
+
     void control(Voice& v, const In& in, Out& out) {
         now += in.dt;
         Control& C = v.control;
@@ -87,7 +95,8 @@ public:
             double want = k + modSum[r][c];
             if (touched || bound[r][c] || hand) { want = want < 0 ? 0 : (want > 1 ? 1 : want); C.setNormalized(r, c, want); }
             else {                                                                  // follow the firmware: its word, normalised to the cell's own limits
-                const double span = x.hi - x.lo; const double wn = span > 0 ? (x.word - x.lo) / span : 0.0;
+                const double span = x.hi - x.lo; double wn = span > 0 ? (x.word - x.lo) / span : 0.0;
+                wn = wn < 0 ? 0 : (wn > 1 ? 1 : wn);                                 // a master can carry a word past the cell's own limits: the knob stops at its end
                 if (std::fabs(wn - k) > 0.5 / (span > 0 ? span : 1.0)) { out.setKnob[r][c] = true; out.knob[r][c] = (float)wn; last[r][c] = (float)wn; }
             }
         }
@@ -119,7 +128,7 @@ public:
     void runEdge(Voice& v) { v.midi.clockStart(); }
 
     void snapshot(Voice& v, Snap& s) const {
-        const Control& C = v.control; s.display = v.machine.displayText(); s.tableReady = C.tableReady(); s.epoch = C.programEpoch; s.load = C.load(); s.fault = C.fault(); s.leds = v.detector.leds();
+        const Control& C = v.control; s.display = clean(C.displayText()); s.tableReady = C.tableReady(); s.epoch = C.programEpoch; s.load = C.load(); s.fault = C.fault(); s.leds = v.detector.leds();
         s.touched = lastTouched; s.sinceTouch = now - touchedAt;
         s.mode = v.keys.mode(); s.paramRow = v.machine.mram[Keys::ROW - 0x8000]; s.paramCol = v.machine.mram[Keys::COL - 0x8000]; s.bypassed = C.bypassed();
         for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) {

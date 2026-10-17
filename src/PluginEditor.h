@@ -15,5 +15,6 @@ private:
     ui::FrontPanel front;
     ui::RearPanel rear;
     juce::ComponentBoundsConstrainer constrainer;
+    juce::TooltipWindow tooltips { this, 700 };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MoonVerbEditor)
 };
