@@ -3,8 +3,8 @@
 A digital reverb and effects processor as a plug-in: **VST3** (macOS, Windows, Linux), **Audio Unit** (macOS) and a **standalone app**.
 
 MoonVerb does not imitate a vintage rack unit: it **runs the unit's own firmware**. Two emulated Z80 processors execute the original program, which builds every reverb, delay and chorus
-program exactly as the hardware did, and an emulated signal processor runs what the firmware writes, behind the converters' real filters. The front panel is laid out like the hardware's;
-the rear-panel switches are in a strip beneath it.
+program exactly as the hardware did, and an emulated signal processor runs what the firmware writes, behind the converters' real filters. The panel is a plug-in's, not a copy of the
+unit's ten-key pad: presets by name, loaded when chosen, and every parameter of the running program as a knob with the firmware's own name and value.
 
 > **MoonVerb makes no sound until you give it firmware images.** They belong to the manufacturer, so they are not included and cannot be. See [Firmware images (ROMs)](#firmware-images-roms) below.
 
@@ -66,11 +66,11 @@ cannot provide or link them. It needs five images:
 
 1. Put the five files in **one folder**. Sub-folders are searched, other files in the folder are ignored, and a folder holding both a V2 and a V3 set uses the newer complete one.
 2. Open MoonVerb (insert it in your DAW, or start the standalone app). The display is blank and the plug-in is silent.
-3. In the **rear-panel strip** under the front panel, click **LOAD ROM FOLDER** and choose that folder.
-4. The five image rows list the files it found and the display says **POWERING ON**. The real firmware boots, which takes **about 10 seconds**; then the display shows a program name such as `0.0 MOD WOBBLE` and audio passes.
+3. Open **SETTINGS** and click **LOAD ROM FOLDER**, then choose that folder.
+4. The five image rows list the files it found and the panel says **POWERING ON**. The real firmware boots, which takes **about 10 seconds**; then the display shows a program name such as `0.0 MOD WOBBLE` and audio passes.
 5. That's it. MoonVerb remembers the folder for every new instance and saves it in your project (the path only, never the images). **FORGET** clears it. If you move the folder, load it again.
 
-If something is wrong the display and the strip say exactly what:
+If something is wrong the panel and the settings say exactly what:
 
 | Message | Meaning |
 |---|---|
@@ -81,11 +81,12 @@ If something is wrong the display and the strip say exactly what:
 
 ### Getting your first sound
 
-1. Insert MoonVerb on an aux/send or an insert; send it audio. The unit has **one input**, so a stereo signal is summed. Raise **INPUT LEVEL** until the level lamps on the left flicker.
-2. Pick a program with the keys, as on the hardware: make sure the **PGM** lamp is lit (press **PGM** if it is not), step the row with **ROW ▲ ▼**, press a digit **0–9**, then **LOAD**. (`1.3` is row 1, digit 3.) Press **REG** and do the same to load one of your own registers.
-3. To edit, press **PGM** while a program is showing: this switches to parameter mode (both lamps go dark) and the display shows a parameter. Step through the parameters with **ROW** and the digits, and turn the
-   **soft knob** (drag up and down, or use the mouse wheel) to change the one on the display. Press **PGM** again to go back. Every parameter is also a host parameter you can automate.
-4. In REG mode, choose a register and **shift-click LOAD** (or right-click it) to store what you've built there: the plug-in's form of the unit's "hold REG, press LOAD". Registers are saved with your project.
+1. Insert MoonVerb on an aux/send or an insert; send it audio. The unit has **one input**, so a stereo signal is summed. Raise **INPUT** until the level lamps at the bottom left flicker.
+2. Pick a preset: **<** and **>** step through every program by name (and on into your own presets), the mouse wheel over the name does the same, and clicking the name opens the
+   whole list. A preset loads the moment you choose it.
+3. Every parameter of the running program is a knob of its own, named and valued by the firmware itself (`RT MID  1.44 S`). Drag or use the wheel (shift for fine); click a knob and the
+   **arrow keys** step it one firmware step at a time (shift: ten); **double-click** puts it back to the preset's value. Every knob is also a host parameter you can automate.
+4. **STORE** saves the running program, as it is now, as one of 50 user presets. They are saved with your project.
 
 The full guide is [docs/MoonVerb.md](docs/MoonVerb.md).
 

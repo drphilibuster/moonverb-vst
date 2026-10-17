@@ -4,11 +4,12 @@
 
 A reverb / delay / chorus / resonant-chord processor from the mid-1980s, running its own firmware. Nothing is re-implemented: the firmware
 (master Z80 and slave Z80) builds each program's microcode, the emulated signal processor runs it, and the host (this plug-in) supplies only what the hardware's
-surroundings did: the front panel, MIDI, the analogue converter chain, the level detector and the wet/dry mix.
+surroundings did: the controls, MIDI, the analogue converter chain, the level detector and the wet/dry mix. The panel is not a copy of the unit's (a ten-key pad and one knob):
+the sound is the unit's, the way you reach it is a plug-in's.
 
 ## The firmware images (you supply them)
 
-Choose **LOAD ROM FOLDER** in the rear-panel strip and select the folder holding your dumps. MoonVerb tells the files apart by their content hash:
+Open **SETTINGS**, choose **LOAD ROM FOLDER** and select the folder holding your dumps. MoonVerb tells the files apart by their content hash:
 
 | Image | Size | What it is |
 |---|---|---|
@@ -19,49 +20,46 @@ Choose **LOAD ROM FOLDER** in the rear-panel strip and select the folder holding
 | U49 | 32 B | sequencer PROM |
 
 A V2.0 set and a V3.01 set are both recognised (V3.01 adds MIDI-clock tempo for the BPM programs); the three large images must come from the same version.
-A wrong or damaged file is named on the strip with the reason. The folder is remembered for every new instance (`~/Library/Application Support/Moon Technologies/MoonVerb/settings.json`
-holds paths only) and saved with each project. **Forget** clears it. Power-up takes about 10 seconds, as on the hardware; the plug-in is silent until the display lights.
+A wrong or damaged file is named on the strip with the reason. The folder is remembered for every new instance (the MoonVerb settings file in your user library folder holds
+paths only, plus the factory program names read from your images) and saved with each project. **Forget** clears it. Power-up takes about 10 seconds, as on the hardware; the plug-in is silent until the display lights.
 
-## The front panel
+## The panel
 
 | Control | What it does |
 |---|---|
-| **Level display** | The five-lamp signal level / headroom display (0 dB at the top). The firmware's gated programs read the same detector. |
-| **Input level** | The input knob (also the host parameter *Input level*). |
-| **Display** | The 16-character display, drawn from the firmware's own display memory. |
-| **PGM**, **REG** | Enter program mode / register mode (lamps show the mode). PGM toggles between program and parameter modes. |
-| **ROW ▲ ▼** | Step through rows of programs, registers or parameters. |
-| **0–9** | Choose a program or register within the row, or a parameter within the row in parameter mode. |
-| **LOAD** | Load the chosen program or register. **Shift-click** (or right-click) **LOAD** to store the running program in the chosen register: the unit's "hold REG, press LOAD", which a mouse cannot do with two fingers. |
-| **BYPASS** | Toggle bypass (lamp). Also the plug-in's host bypass. |
-| **Soft knob** | Edits the parameter the display shows (parameter mode): the firmware's own edit routine, so ranges, limits and masters behave exactly as on the hardware. Drag up/down or use the wheel; a fast turn travels further. In program and register mode the firmware ignores it, as the hardware does: press **PGM** (its lamp goes out) to reach the parameters. |
-| **Power** | Off silences the unit; on powers it up again. The registers are kept (battery RAM). |
+| **< preset >** | The preset browser. **<** and **>** step to the previous / next preset that holds something: the factory programs in order, then your user presets, wrapping round. The mouse wheel over the name steps too; clicking the name opens the list (FACTORY by row, USER by slot). Choosing a preset loads it at once: the plug-in calls the firmware's own program-change routine, so the result is exactly what the unit's LOAD key gives (about 1 s, the firmware's own load time). The line above the name shows the slot, LOADING, STORING, or EDITED once you have changed something. |
+| **STORE** | Saves the running program, as it is now, as a user preset (50 slots; replacing one asks first). |
+| **BYPASS** | The unit's own bypass (also the plug-in's host bypass). |
+| **POWER** | Off silences the unit; on powers it up again. The user presets and settings are kept (battery RAM). |
+| **Display** | The unit's own 16-character display. Beside it: the parameter you last touched, or what is loading, or the preset and its number of parameters. |
+| **Parameters** | Every parameter of the running program, as a knob: its name and value are the firmware's own, laid out in the firmware's own rows. The masters (… MST, amber) move their six voices with them, as on the unit. Drag or use the wheel (shift: fine); click a knob, then **up / down** step it by one firmware step (shift: ten) and **left / right** choose the next knob; **double-click** returns it to the value the preset had. |
+| **RATE** (BPM programs) | **HZ**: the program's beat as a rate. **SYNC**: the beat is a note value of the host's tempo (1/4, 1/8., 1/8T, ...), followed as the tempo changes; drag or use the wheel to choose the note value. The unit plays 64 to 191 BPM, so note values outside that at the current tempo are skipped. |
+| **INPUT**, lamps | The input level (also the host parameter *Input level*) and the five-lamp level display (-24 to 0 dB). The firmware's gated programs read the same detector. |
+| **INPUT / OUTPUT -20 dBV** | The unit's two rear level switches: 15 dB less at the converter input, 24.7 dB less at the output. |
 
-The keys are pressed into the firmware's key matrix as a finger would; a quick click is held long enough to be seen.
+**SETTINGS** opens a drawer:
 
-## The rear-panel strip
-
-* **Firmware images**: loads and lists the images, as above.
-* **MIDI**: channel, OMNI, and whether program change is accepted (settings the firmware keeps in its battery RAM).
-* **Levels**: the two rear switches, *main input* and *output*, each `+4 dBu` or `-20 dBV` (15 dB less at the converter input, 24.7 dB less at the output).
-* **Registers**: import and export a standard SysEx register bank (all 50 registers).
-* **System**: *Power cycle*, and *Clear memory* (the hardware's CLEAR MEMORY: factory-fresh registers).
+* **Firmware images**: load and forget, the files found, the version.
+* **MIDI**: channel, OMNI, and PROGRAM CHANGE (MIDI program change *n* loads user preset *n*); settings the firmware keeps in its battery RAM.
+* **User presets**: import and export a standard SysEx bank (all 50).
+* **System**: *Power cycle*, *Clear memory* (the hardware's CLEAR MEMORY: no user presets, factory settings), and *Show matrix numbers* (each knob's `row.column`, for anyone who knows the unit).
 
 ## Host integration
 
 * **Audio**: mono or stereo in, stereo out. The unit has one input, so a stereo signal is summed (average of left and right). The host sample rate is used directly: the converter's own
   filters and rate conversion run at your rate, and the plug-in reports its latency (about 25 samples at 48 kHz) for delay compensation; the dry path is delayed to match.
   Digital full scale is the converter's full scale, with the input knob at maximum and the switch at `+4 dBu`.
+* **Programs**: the host's program list holds the 70 factory slots and the 50 user presets, so a host's preset menu or program change selects them.
 * **Parameters**: *Input level*, the two level switches, *Bypass* and 45 parameter knobs `Parameter r.c` (the machine's own parameter matrix, 5 rows × 9 columns, whatever the running program
   calls them; the host shows the firmware's name and value while a program is loaded). Moving one asks the firmware to set that word; when the firmware changes a word itself (a program load) the host parameter follows.
   A scheduler keeps fast automation from overwhelming the firmware's main loop (about 100 edits a second in total, 65 % of its time at most).
 * **MIDI**: notes, controllers, pitch bend, channel pressure, program change and SysEx go to the firmware's MIDI port, so its own *dynamic MIDI* patches (controller → parameter, programmed in the registers) work.
-  Channel and OMNI follow the rear-panel setting. With V3.01 firmware the host transport (tempo and position) drives the 24-pulses-per-quarter-note clock the BPM programs measure; MIDI clock arriving from the host is used instead if present.
-* **State**: projects save the firmware paths, the 8 KB battery RAM (your registers and settings, no firmware data) and the host parameters.
+  Channel and OMNI follow the setting in SETTINGS. MIDI clock arriving from the host reaches the firmware's clock input (V3.01 measures it); the host's tempo itself reaches the BPM programs through RATE's SYNC mode.
+* **State**: projects save the firmware paths, the 8 KB battery RAM (your user presets and settings, no firmware data), the running preset, RATE's mode and note value, and the host parameters.
 
 ## What is exact and what is not
 
-Exact: the firmware (it is the firmware); every program, parameter and register; the display; the keys; the MIDI behaviour; the signal processor's arithmetic (bit-identical to the reference model in the tests).
+Exact: the firmware (it is the firmware); every program, parameter and register; program loads (the firmware's own routine); the display; the MIDI behaviour; the signal processor's arithmetic (bit-identical to the reference model in the tests).
 
 Modelled from measurement, not the schematic alone: the converter filters, the level detector and the mix stage (tested against recordings of the real unit; reverb decay envelopes match within about 1 dB on most programs).
 

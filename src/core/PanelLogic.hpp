@@ -11,10 +11,12 @@
 //     change, the bypass gate, and the clock (24 ppqn pulses from edges at 1/2/4/8/24 per quarter note; V3 firmware only) and run;
 //   * levels: the input knob, the +4/-20 switches, the full-scale trim.
 #pragma once
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
+#include "BatRam.hpp"
 #include "Voice.hpp"
 
 namespace moonverb {
@@ -39,7 +41,7 @@ public:
     };
     struct Snap {
         std::string display;                        // the 16-digit display
-        bool valid[ROWS][COLS] = {}; std::string name[ROWS][COLS], caption[ROWS][COLS]; int lo[ROWS][COLS] = {}, hi[ROWS][COLS] = {}, word[ROWS][COLS] = {};
+        bool valid[ROWS][COLS] = {}, master[ROWS][COLS] = {}; std::string name[ROWS][COLS], caption[ROWS][COLS]; int lo[ROWS][COLS] = {}, hi[ROWS][COLS] = {}, word[ROWS][COLS] = {};
         int touched = -1;                           // last-touched cell (row * COLS + col) and when
         double sinceTouch = 99.0;
         std::string laneName[LANES];
@@ -50,6 +52,12 @@ public:
     int laneTarget[LANES]; bool armed[LANES] = {};  // laneTarget is part of the patch
     PanelLogic() { for (int i = 0; i < LANES; i++) laneTarget[i] = -1; for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) { last[r][c] = -1.f; touch[r][c] = -99.0; } }
 
+    static bool registerUsed(const uint8_t* ram, int n) { return ram[batram::slotAddr(n) - 0x8000] != 0; }
+    /** A register's own name ("" when it holds nothing). */
+    static std::string registerName(const uint8_t* ram, int n) {
+        if (!registerUsed(ram, n)) return std::string();
+        return tidy(std::string((const char*)ram + (batram::slotAddr(n) - 0x8000) + 3, 13));      // what the display shows after "r.c ": the rest of the field is not part of it
+    }
     /** The firmware's 16 digits with the glyphs the font has no letter for taken out: a '?' is a symbol the display draws and this one cannot, and the dot that
         belongs to it goes too. */
     static std::string clean(const std::string& d) {
@@ -91,7 +99,7 @@ public:
                 for (int i = 0; i < LANES; i++) if (armed[i]) { laneTarget[i] = (laneTarget[i] == r * COLS + c) ? -1 : r * COLS + c; armed[i] = false; }
             }
             const bool hand = now - touch[r][c] < 0.6;
-            if (!hand && now - touch[r][c] > 3.0) C.watch(r, c, bound[r][c]);        // captions only for what is being worked, and what a lane drives
+            if (!hand && now - touch[r][c] > 3.0) C.watch(r, c, bound[r][c] || x.captionStale);   // captions for what is being worked, what a lane drives, and any word that moved
             double want = k + modSum[r][c];
             if (touched || bound[r][c] || hand) { want = want < 0 ? 0 : (want > 1 ? 1 : want); C.setNormalized(r, c, want); }
             else {                                                                  // follow the firmware: its word, normalised to the cell's own limits
@@ -134,9 +142,40 @@ public:
         for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) {
             const Cell& x = C.cell(r, c); const bool ok = C.tableReady() && x.editable() && !(r == 0 && c == 9);
             s.valid[r][c] = ok; s.lo[r][c] = x.lo; s.hi[r][c] = x.hi; s.word[r][c] = x.word;
-            s.name[r][c] = ok ? tidy(std::string(x.text, 14)) : std::string(); s.caption[r][c] = ok ? x.caption : std::string();
+            s.master[r][c] = ok && x.master && std::string(x.text, 14).find("MST") != std::string::npos;     // the masters are the firmware's ... MST cells (LVL MST, REFL DLY MST)
+            if (ok) {
+                label(std::string(x.text, 13), x.caption, s.name[r][c], s.caption[r][c]);
+                // the 16 digits can run out before the value does (V3's two symbol digits, a long name): the formatter writes nothing visible, so show the
+                // parameter's step, which is the number the firmware prints for a plain 0..n parameter
+                if (x.caption.empty() && !x.captionStale) s.caption[r][c] = std::to_string(x.word - x.lo);
+            } else { s.name[r][c].clear(); s.caption[r][c].clear(); }
         }
         for (int i = 0; i < LANES; i++) s.laneName[i] = laneTarget[i] >= 0 && s.valid[laneTarget[i] / COLS][laneTarget[i] % COLS] ? s.name[laneTarget[i] / COLS][laneTarget[i] % COLS] : (armed[i] ? "TOUCH" : std::string());
+    }
+    /** The firmware's name text is a template its formatter fills in: "MIX     % WET" takes the value in the gap, "V  LVL" takes the voice number in the double
+        space ("V1 LVL"). From the template and the caption the formatter wrote, a name ("V1 LVL", "MIX") and a value with its unit ("FULL", "100 % WET"). */
+    static void label(const std::string& raw, const std::string& caption, std::string& name, std::string& value) {
+        std::string t = raw; for (char& ch : t) if ((unsigned char)ch < 32 || (unsigned char)ch > 126) ch = ' ';
+        const size_t lead = t.find_first_not_of(' ');
+        const size_t gap = lead == std::string::npos ? std::string::npos : t.find("   ", lead);
+        std::string head = lead == std::string::npos ? std::string() : t.substr(lead, gap == std::string::npos ? std::string::npos : gap - lead), tail;
+        if (gap != std::string::npos) { const size_t a = t.find_first_not_of(' ', gap); if (a != std::string::npos) tail = tidy(t.substr(a)); }
+        std::string val = tidy(caption);
+        auto firstWord = [](std::string& v) { const size_t sp = v.find(' '); std::string w = v.substr(0, sp); v = sp == std::string::npos ? std::string() : tidy(v.substr(sp + 1)); return w; };
+        const size_t dbl = head.find("  ");
+        if (lead != std::string::npos && lead >= 2 && !val.empty()) head = firstWord(val) + " " + head;                 // "   RFL" + "L2 OFF": the voice fills the blanks
+        else if (dbl != std::string::npos && val.size() >= 2 && std::isdigit((unsigned char)val[0]) && val[1] == ' ') {     // "V  LVL" + "1 FULL": the voice number
+            head = head.substr(0, dbl) + val[0] + " " + head.substr(head.find_first_not_of(' ', dbl)); val = tidy(val.substr(1));
+        }
+        head = tidy(head);
+        if (head.size() >= 2 && (head.back() == '-' || head.back() == '+') && head[head.size() - 2] == ' ') { val = std::string(1, head.back()) + val; head = tidy(head.substr(0, head.size() - 1)); }   // "V3 FDBK -": the sign is the value's
+        if (head.empty() && val.find(' ') != std::string::npos) head = firstWord(val);
+        name = head; value = val;
+        if (!tail.empty()) {
+            const std::string last = tail.substr(tail.find_last_of(' ') == std::string::npos ? 0 : tail.find_last_of(' ') + 1);
+            const bool has = value.size() >= last.size() && value.compare(value.size() - last.size(), last.size(), last) == 0;     // "32 S": the unit is there already
+            if (!has) value = value.empty() ? tail : value + " " + tail;
+        }
     }
     static std::string tidy(const std::string& t) {            // the firmware's 14-byte name/unit text: printable, single spaces
         std::string o; bool sp = false;

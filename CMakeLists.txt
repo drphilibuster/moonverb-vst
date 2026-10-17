@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MoonVerb VERSION 1.0.2 LANGUAGES C CXX)
+project(MoonVerb VERSION 1.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,7 +49,7 @@ juce_add_plugin(MoonVerb
 set(MOONVERB_SOURCES
   src/PluginProcessor.cpp src/PluginProcessor.h
   src/PluginEditor.cpp src/PluginEditor.h
-  src/ui/FrontPanel.h src/ui/FrontPanel.cpp)
+  src/ui/Panel.h src/ui/Panel.cpp)
 
 target_sources(MoonVerb PRIVATE ${MOONVERB_SOURCES})
 target_include_directories(MoonVerb PRIVATE src src/core)
@@ -82,6 +82,14 @@ target_include_directories(moonverb_controls_test PRIVATE src src/core)
 target_compile_definitions(moonverb_controls_test PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_WINRT_MIDI=0)
 target_link_libraries(moonverb_controls_test PRIVATE moonverb_z80 juce::juce_audio_utils juce::juce_audio_processors juce::juce_recommended_config_flags)
 set_target_properties(moonverb_controls_test PROPERTIES EXCLUDE_FROM_ALL TRUE)
+
+# The panel's functions (presets, every parameter, store, host programs, state) and an editor snapshot: `cmake --build build --target moonverb_panel_test`
+juce_add_console_app(moonverb_panel_test PRODUCT_NAME moonverb_panel_test)
+target_sources(moonverb_panel_test PRIVATE tests/panel_test.cpp ${MOONVERB_SOURCES})
+target_include_directories(moonverb_panel_test PRIVATE src src/core)
+target_compile_definitions(moonverb_panel_test PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1 JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_USE_WINRT_MIDI=0)
+target_link_libraries(moonverb_panel_test PRIVATE moonverb_z80 juce::juce_audio_utils juce::juce_audio_processors juce::juce_recommended_config_flags)
+set_target_properties(moonverb_panel_test PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 # Loads the *installed* VST3 / AU the way a DAW does: `cmake --build build --target moonverb_host_test`
 juce_add_console_app(moonverb_host_test PRODUCT_NAME moonverb_host_test)

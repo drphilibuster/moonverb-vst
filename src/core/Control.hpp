@@ -92,7 +92,18 @@ public:
     void setAutoLoad(bool on) { poke(0x993B, on ? 1 : 0); }
     void setMemoryProtect(bool on) { poke(isV3 ? 0x9C6C : 0x9C6A, on ? 1 : 0); }
     void probeNow(int row, int col) { Job j; j.kind = PROBE; j.row = row; j.col = col; jobs.push_back(j); }
-    bool busy() const { return !jobs.empty() || phase != 0 || harvestPending > 0 || anyDirty(); }
+    // ---- program / register load (Step 60) ----------------------------------------------------------------------------------------------------------
+    // The firmware's own remote load, the routine behind MIDI program change (V2 0x399A, V3 0x3A3C; L = n): n 0-49 = register n, 50-119 = factory program
+    // n-50. It enters REG or PGM mode as the F3/F4 key would, sets the location, calls the same loader the LOAD key calls (program V2 0x400A / V3 0x40AC,
+    // register 0x45FE / 0x46A0, HL = row, DE = col) and redraws the display. The host calls it at the idle epilogue like an edit, so the program is running
+    // on the HSP about 0.9 s after the request instead of the key sequence's ~2 s; the state it leaves equals the LOAD key's except for the key handling
+    // itself (event ring, last key, key timers; tests/load_test.cpp). As on the hardware an empty slot does nothing, and neither does the slot already
+    // loaded unless it was edited (0x9940). Rows: programs 0-6, registers 0-4. The latest request wins: one asked for while a load runs replaces any
+    // still waiting. Returns false if the slot is out of range or the ROM lacks the routine.
+    bool loadProgram(int row, int col) { return requestLoad(false, row, col); }
+    bool loadRegister(int n) { return n >= 0 && n < 50 && requestLoad(true, n / 10, n % 10); }
+    uint64_t loadsDone() const { return nLoads; }
+    bool busy() const { return !jobs.empty() || phase != 0 || harvestPending > 0 || anyDirty() || loadPending; }
     uint64_t editsDone() const { return nEdits; }
 
     // ---- what the panel should show on the 16-digit display (the live display RAM, except while a probe has it blanked) ------------------------------
@@ -107,7 +118,7 @@ public:
     bool bypassed() const { return M.mram[0x9B33 - 0x8000] != 0; }
 
     // forget everything about the running program (after a power cycle)
-    void reset() { ready = false; haveIdent = false; jobs.clear(); eq.cells.clear(); lastReal.clear(); phase = 0; harvestPending = 0; faultUntil = 0; loadMeter = 0; for (Cell& c : cells) c = Cell(); }
+    void reset() { ready = false; haveIdent = false; jobs.clear(); loadPending = false; ldFound = false; eq.cells.clear(); lastReal.clear(); phase = 0; harvestPending = 0; faultUntil = 0; loadMeter = 0; for (Cell& c : cells) c = Cell(); }
 
     // diagnostics
     uint64_t probes = 0, stuck = 0, idlePasses = 0; uint64_t busyCycles = 0, maxCallCycles = 0;
@@ -128,7 +139,7 @@ public:
     }
 
 private:
-    enum Kind { EDIT, POKE, PROBE };
+    enum Kind { EDIT, POKE, PROBE, LOAD };
     struct Job { Kind kind = EDIT; int row = 0, col = 0, delta = 0; unsigned addr = 0; std::vector<uint8_t> block; bool caption = false; bool harvest = false; };
 
     Machine& M;
@@ -141,7 +152,7 @@ private:
     unsigned identLoads = 0; bool haveIdent = false; double loadMeter = 0; uint64_t winStart = 0, winBusy = 0, faultUntil = 0;
     uint64_t nextWordRefresh = 0, nextCaption = 0, nEdits = 0;
     // call in progress
-    int phase = 0;                          // 0 idle, 1 edit running, 2 probe: selector running, 3 probe: formatter running
+    int phase = 0;                          // 0 idle, 1 edit running, 2 probe: selector running, 3 probe: formatter running, 4 load running
     Job cur; uint64_t phaseStart = 0; int curEq = -1;
     uint8_t savedDisp[0x21] = {}; uint8_t savedSel[64] = {}; unsigned savedSelBase = 0, savedSelLen = 0;
     unsigned curDesc = 0;
@@ -183,6 +194,7 @@ private:
     }
 
     void startNext(Machine& m) {
+        if (loadPending) { loadPending = false; cur = loadJob; begin(m); return; }
         if (!jobs.empty()) { cur = jobs.front(); jobs.pop_front(); begin(m); return; }
         // captions of watched cells whose word moved
         if (ready && m.m.cyc >= nextCaption) {
@@ -198,6 +210,7 @@ private:
     void begin(Machine& m) {
         if (cur.kind == POKE) { for (size_t i = 0; i < cur.block.size(); i++) m.mram[cur.addr + i - 0x8000] = cur.block[i]; return; }
         if (cur.kind == EDIT) { phase = 1; regs(m, cur.row, cur.col, cur.delta & 0xFFFF); call(m, m.loc.edit); return; }
+        if (cur.kind == LOAD) { phase = 4; regs(m, cur.delta, 0, 0); call(m, cur.addr); return; }
         // probe: save what the selector and formatter will disturb, blank the display RAM
         memcpy(savedDisp, &m.mram[0x9BF3 - 0x8000], 0x21); memset(&m.mram[0x9BF3 - 0x8000], 0, 0x21);
         savedSelBase = m.loc.vB6 - 4; savedSelLen = m.loc.vBB + 1 - savedSelBase; if (savedSelLen > sizeof savedSel) savedSelLen = sizeof savedSel;
@@ -215,6 +228,7 @@ private:
             if (curEq >= 0) { eq.doneWith([&](unsigned k) { return word((int)k); }, d, m.m.cyc); curEq = -1; } else nextWordRefresh = 0;
             return;
         }
+        if (phase == 4) { nLoads++; phase = 0; nextWordRefresh = 0; return; }   // load finished: the program detector sees the new type next pass
         if (phase == 2) {                                                              // selector finished
             const unsigned desc = rd16(m.loc.vB8);
             Cell& c = cells[cur.row * COLS + cur.col];
@@ -248,6 +262,35 @@ private:
         }
         ready = true;
     }
+
+    // ---- program / register load ----------------------------------------------------------------------------------------------------------------
+    Job loadJob; bool loadPending = false; uint64_t nLoads = 0; bool ldFound = false; unsigned ldPgm = 0, ldReg = 0, ldPc = 0;
+    bool requestLoad(bool reg, int row, int col) {
+        if (row < 0 || col < 0 || col > 9 || row > (reg ? 4 : 6) || !locateLoad()) return false;
+        loadJob = Job(); loadJob.kind = LOAD; loadJob.addr = ldPc; loadJob.delta = (reg ? 0 : 50) + row * 10 + col; loadPending = true; return true;
+    }
+    // By signature, as Locate.hpp does. The program-change routine: PUSH HL / LD A,L / CP 50 / JR NC / LD A,(MODE) / CP 4 / JR Z,+6 / LD HL,0x23 (F3 tap) /
+    // CALL key action / POP DE / PUSH DE / LD D,0 / LD HL,1 / CALL load slot. The loaders (for tests and notes): the LOAD handler's mode table {2, PGM case, 4, REG case, 5, STORE case, 1, PARAM case}; each case is
+    //   LD A,(return mode) / AND A / JR NZ,+15 / LD A,(COL) / LD E,A / LD D,0 / LD A,(ROW) / LD L,A / LD H,0 / CALL routine   with COL 0x9949, ROW 0x994A.
+    bool locateLoad() {
+        if (ldFound) return true;                                                    // only a success is kept: the ROM may not be installed yet
+        const uint8_t* r = M.mrom; const size_t n = sizeof M.mrom;
+        static const int cs[] = { 0x3a, -1, -1, 0xa7, 0x20, 0x0f, 0x3a, 0x49, 0x99, 0x5f, 0x16, 0x00, 0x3a, 0x4a, 0x99, 0x6f, 0x26, 0x00, 0xcd };
+        auto target = [&](unsigned c) -> unsigned { return c + sizeof cs / sizeof cs[0] + 2 <= n && moonverbMatch(r, n, c, cs, sizeof cs / sizeof cs[0]) ? (unsigned)(r[c + 19] | r[c + 20] << 8) : 0u; };
+        for (size_t i = 0; i + 16 <= n; i++) {
+            if (r[i] != 2 || r[i + 1] || r[i + 4] != 4 || r[i + 5] || r[i + 8] != 5 || r[i + 9] || r[i + 12] != 1 || r[i + 13]) continue;
+            const unsigned p = target(r[i + 2] | r[i + 3] << 8), g = target(r[i + 6] | r[i + 7] << 8);
+            if (p && g && p < 0x8000 && g < 0x8000) { ldPgm = p; ldReg = g; break; }
+        }
+        static const int pc[] = { 0xe5, 0x7d, 0xfe, 0x32, 0x30, -1, 0x3a, 0x4d, 0x99, 0xfe, 0x04, 0x28, 0x06, 0x21, 0x23, 0x00, 0xcd, -1, -1, 0xd1, 0xd5, 0x16, 0x00, 0x21, 0x01, 0x00, 0xcd };
+        const long q = moonverbFind(r, n, pc); ldPc = q < 0 ? 0 : (unsigned)q;
+        ldFound = ldPc && ldPgm && ldReg;
+        return ldFound;
+    }
+public:
+    unsigned loadProgramAt() { locateLoad(); return ldPgm; }
+    unsigned loadRegisterAt() { locateLoad(); return ldReg; }
+    unsigned programChangeAt() { locateLoad(); return ldPc; }
 };
 
 }

@@ -9,6 +9,10 @@ tests/test_voice
 tests/test_control
 tests/test_panel
 tests/voice_ir
+tests/load_test
+tests/fdbk_probe
+panel.png
+editor.png
 tests/*.o
 
 # The firmware images are the manufacturer's and are never committed. MoonVerb loads them at run time

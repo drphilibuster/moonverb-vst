@@ -12,9 +12,9 @@ CORE := ../src/core/Roms.hpp
 MACHINE := ../src/core/Machine.hpp ../src/core/Locate.hpp ../src/core/Drive.hpp ../src/core/BatRam.hpp ../src/core/Hsp.hpp ../src/core/HspJit.hpp fixtures.hpp hsp_ref.hpp ../src/vendor/z80/z80.c ../src/vendor/z80/z80.h
 CC ?= cc
 
-all: test_roms test_machine test_hsp test_analog test_voice test_control test_panel
+all: test_roms test_machine test_hsp test_analog test_voice test_control test_panel load_test
 
-test: test_roms test_machine test_hsp test_analog test_voice test_control test_panel
+test: test_roms test_machine test_hsp test_analog test_voice test_control test_panel load_test
 	./test_roms
 	./test_machine
 	./test_hsp
@@ -22,6 +22,7 @@ test: test_roms test_machine test_hsp test_analog test_voice test_control test_p
 	./test_voice
 	./test_control
 	./test_panel
+	./load_test
 
 test_roms: test_roms.cpp $(CORE)
 	$(CXX) $(CXXFLAGS) -o $@ test_roms.cpp
@@ -46,6 +47,9 @@ test_control: test_control.cpp fixtures.hpp $(MACHINE) ../src/core/Control.hpp z
 
 test_panel: test_panel.cpp fixtures.hpp $(MACHINE) ../src/core/Analog.hpp ../src/core/Voice.hpp ../src/core/PanelLogic.hpp z80.o
 	$(CXX) $(CXXFLAGS) -o $@ test_panel.cpp z80.o
+
+load_test: load_test.cpp fixtures.hpp $(MACHINE) ../src/core/Control.hpp ../src/core/Keys.hpp ../src/core/Midi.hpp z80.o
+	$(CXX) $(CXXFLAGS) -o $@ load_test.cpp z80.o
 
 test_analog: test_analog.cpp ../src/core/Analog.hpp
 	$(CXX) $(CXXFLAGS) -o $@ test_analog.cpp
